@@ -4,6 +4,8 @@ use soroban_sdk::{
     contract, contractclient, contractimpl, contracttype, symbol_short, Address, Env, Map, Vec,
 };
 
+use remitwise_common::Category;
+
 // Storage TTL constants for active data
 const INSTANCE_LIFETIME_THRESHOLD: u32 = 17280; // ~1 day
 const INSTANCE_BUMP_AMOUNT: u32 = 518400; // ~30 days
@@ -11,17 +13,6 @@ const INSTANCE_BUMP_AMOUNT: u32 = 518400; // ~30 days
 // Storage TTL constants for archived data (longer retention, less frequent access)
 const ARCHIVE_LIFETIME_THRESHOLD: u32 = 17280; // ~1 day
 const ARCHIVE_BUMP_AMOUNT: u32 = 2592000; // ~180 days (6 months)
-
-/// Category for financial breakdown
-#[contracttype]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(u32)]
-pub enum Category {
-    Spending = 1,
-    Savings = 2,
-    Bills = 3,
-    Insurance = 4,
-}
 
 /// Financial health score (0-100)
 #[contracttype]
@@ -237,7 +228,7 @@ pub trait BillPaymentsTrait {
 
 #[contractclient(name = "InsuranceClient")]
 pub trait InsuranceTrait {
-    fn get_active_policies(env: Env, owner: Address) -> Vec<InsurancePolicy>;
+    fn get_active_policies(env: Env, owner: Address, cursor: u32, limit: u32) -> PolicyPage;
     fn get_total_monthly_premium(env: Env, owner: Address) -> i128;
 }
 
@@ -284,6 +275,15 @@ pub struct InsurancePolicy {
     pub coverage_amount: i128,
     pub active: bool,
     pub next_payment_date: u64,
+    pub schedule_id: Option<u32>,
+}
+
+#[contracttype]
+#[derive(Clone)]
+pub struct PolicyPage {
+    pub items: Vec<InsurancePolicy>,
+    pub next_cursor: u32,
+    pub count: u32,
 }
 
 #[contract]
@@ -556,7 +556,8 @@ impl ReportingContract {
             .unwrap_or_else(|| panic!("Contract addresses not configured"));
 
         let insurance_client = InsuranceClient::new(&env, &addresses.insurance);
-        let policies = insurance_client.get_active_policies(&user);
+        let policy_page = insurance_client.get_active_policies(&user, &0, &50);
+        let policies = policy_page.items;
         let monthly_premium = insurance_client.get_total_monthly_premium(&user);
 
         let mut total_coverage = 0i128;
@@ -631,8 +632,8 @@ impl ReportingContract {
 
         // Insurance score (0-20 points)
         let insurance_client = InsuranceClient::new(&env, &addresses.insurance);
-        let policies = insurance_client.get_active_policies(&user);
-        let insurance_score = if !policies.is_empty() { 20 } else { 0 };
+        let policy_page = insurance_client.get_active_policies(&user, &0, &1);
+        let insurance_score = if !policy_page.items.is_empty() { 20 } else { 0 };
 
         let total_score = savings_score + bills_score + insurance_score;
 

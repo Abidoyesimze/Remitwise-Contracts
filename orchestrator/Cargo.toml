@@ -12,6 +12,8 @@ soroban-sdk = "21.0.0"
 [dev-dependencies]
 soroban-sdk = { version = "21.0.0", features = ["testutils"] }
 
+testutils = { path = "../testutils" }
+
 [profile.release]
 opt-level = "z"
 overflow-checks = true
@@ -25,3 +27,4 @@ lto = true
 [profile.release-with-logs]
 inherits = "release"
 debug-assertions = true
+
