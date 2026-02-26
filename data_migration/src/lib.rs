@@ -3,6 +3,8 @@
 //! Supports multiple formats (JSON, binary, CSV), checksum validation,
 //! version compatibility checks, and data integrity verification.
 
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
+
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -105,7 +107,7 @@ impl ExportSnapshot {
     /// Compute SHA256 checksum of the payload (canonical JSON).
     pub fn compute_checksum(&self) -> String {
         let mut hasher = Sha256::new();
-        hasher.update(serde_json::to_vec(&self.payload).expect("payload must be serializable"));
+        hasher.update(serde_json::to_vec(&self.payload).unwrap_or_else(|_| panic!("payload must be serializable")));
         hex::encode(hasher.finalize().as_ref())
     }
 

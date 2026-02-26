@@ -1,4 +1,5 @@
 #![no_std]
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, symbol_short, Address, Env, Map, String,
     Symbol, Vec,
@@ -295,7 +296,7 @@ impl SavingsGoalContract {
 
     pub fn pause(env: Env, caller: Address) {
         caller.require_auth();
-        let admin = Self::get_pause_admin(&env).expect("No pause admin set");
+        let admin = Self::get_pause_admin(&env).ok_or(SavingsGoalsError::Unauthorized).unwrap();
         if admin != caller {
             panic!("Unauthorized");
         }
@@ -308,7 +309,7 @@ impl SavingsGoalContract {
 
     pub fn unpause(env: Env, caller: Address) {
         caller.require_auth();
-        let admin = Self::get_pause_admin(&env).expect("No pause admin set");
+        let admin = Self::get_pause_admin(&env).ok_or(SavingsGoalsError::Unauthorized).unwrap();
         if admin != caller {
             panic!("Unauthorized");
         }
@@ -328,7 +329,7 @@ impl SavingsGoalContract {
 
     pub fn pause_function(env: Env, caller: Address, func: Symbol) {
         caller.require_auth();
-        let admin = Self::get_pause_admin(&env).expect("No pause admin set");
+        let admin = Self::get_pause_admin(&env).ok_or(SavingsGoalsError::Unauthorized).unwrap();
         if admin != caller {
             panic!("Unauthorized");
         }
@@ -345,7 +346,7 @@ impl SavingsGoalContract {
 
     pub fn unpause_function(env: Env, caller: Address, func: Symbol) {
         caller.require_auth();
-        let admin = Self::get_pause_admin(&env).expect("No pause admin set");
+        let admin = Self::get_pause_admin(&env).ok_or(SavingsGoalsError::Unauthorized).unwrap();
         if admin != caller {
             panic!("Unauthorized");
         }
@@ -394,7 +395,10 @@ impl SavingsGoalContract {
 
     pub fn set_version(env: Env, caller: Address, new_version: u32) {
         caller.require_auth();
-        let admin = Self::get_upgrade_admin(&env).expect("No upgrade admin set");
+        let admin = match Self::get_upgrade_admin(&env) {
+            Some(a) => a,
+            None => panic!("No upgrade admin set"),
+        };
         if admin != caller {
             panic!("Unauthorized");
         }
@@ -705,7 +709,10 @@ impl SavingsGoalContract {
             if item.amount <= 0 {
                 panic!("Amount must be positive");
             }
-            let goal = goals_map.get(item.goal_id).expect("Goal not found");
+            let goal = match goals_map.get(item.goal_id) {
+                Some(g) => g,
+                None => panic!("Goal not found"),
+            };
             if goal.owner != caller {
                 panic!("Not owner of all goals");
             }
@@ -718,14 +725,19 @@ impl SavingsGoalContract {
             .unwrap_or_else(|| Map::new(&env));
         let mut count = 0u32;
         for item in contributions.iter() {
-            let mut goal = goals.get(item.goal_id).expect("Goal not found");
+            let mut goal = match goals.get(item.goal_id) {
+                Some(g) => g,
+                None => panic!("Goal not found"),
+            };
             if goal.owner != caller {
                 panic!("Batch validation failed");
             }
-            goal.current_amount = goal
+            goal.current_amount = match goal
                 .current_amount
-                .checked_add(item.amount)
-                .expect("overflow");
+                .checked_add(item.amount) {
+                    Some(v) => v,
+                    None => panic!("overflow"),
+                };
             let new_total = goal.current_amount;
             let was_completed = new_total >= goal.target_amount;
             let previously_completed = (new_total - item.amount) >= goal.target_amount;
@@ -1144,7 +1156,10 @@ impl SavingsGoalContract {
 
     fn increment_nonce(env: &Env, address: &Address) {
         let current = Self::get_nonce(env.clone(), address.clone());
-        let next = current.checked_add(1).expect("nonce overflow");
+        let next = match current.checked_add(1) {
+            Some(v) => v,
+            None => panic!("nonce overflow"),
+        };
         let mut nonces: Map<Address, u64> = env
             .storage()
             .instance()
@@ -1282,7 +1297,10 @@ impl SavingsGoalContract {
             .get(&symbol_short!("GOALS"))
             .unwrap_or_else(|| Map::new(&env));
 
-        let goal = goals.get(goal_id).expect("Goal not found");
+        let goal = match goals.get(goal_id) {
+            Some(g) => g,
+            None => panic!("Goal not found"),
+        };
 
         if goal.owner != owner {
             panic!("Only the goal owner can create schedules");
@@ -1445,10 +1463,12 @@ impl SavingsGoalContract {
             }
 
             if let Some(mut goal) = goals.get(schedule.goal_id) {
-                goal.current_amount = goal
+                goal.current_amount = match goal
                     .current_amount
-                    .checked_add(schedule.amount)
-                    .expect("overflow");
+                    .checked_add(schedule.amount) {
+                        Some(v) => v,
+                        None => panic!("overflow"),
+                    };
 
                 let is_completed = goal.current_amount >= goal.target_amount;
                 goals.set(schedule.goal_id, goal.clone());

@@ -1,4 +1,5 @@
 #![no_std]
+#![cfg_attr(not(test), deny(clippy::unwrap_used, clippy::expect_used))]
 use soroban_sdk::{
     contract, contractclient, contractimpl, contracttype, symbol_short, Address, Env, Map, Vec,
 };
@@ -393,7 +394,7 @@ impl ReportingContract {
             .storage()
             .instance()
             .get(&symbol_short!("ADDRS"))
-            .expect("Contract addresses not configured");
+            .unwrap_or_else(|| panic!("Contract addresses not configured"));
 
         let split_client = RemittanceSplitClient::new(&env, &addresses.remittance_split);
         let split_percentages = split_client.get_split();
@@ -435,7 +436,7 @@ impl ReportingContract {
             .storage()
             .instance()
             .get(&symbol_short!("ADDRS"))
-            .expect("Contract addresses not configured");
+            .unwrap_or_else(|| panic!("Contract addresses not configured"));
 
         let savings_client = SavingsGoalsClient::new(&env, &addresses.savings_goals);
         let goals = savings_client.get_all_goals(&user);
@@ -481,7 +482,7 @@ impl ReportingContract {
             .storage()
             .instance()
             .get(&symbol_short!("ADDRS"))
-            .expect("Contract addresses not configured");
+            .unwrap_or_else(|| panic!("Contract addresses not configured"));
 
         let bill_client = BillPaymentsClient::new(&env, &addresses.bill_payments);
         let all_bills = bill_client.get_all_bills();
@@ -552,7 +553,7 @@ impl ReportingContract {
             .storage()
             .instance()
             .get(&symbol_short!("ADDRS"))
-            .expect("Contract addresses not configured");
+            .unwrap_or_else(|| panic!("Contract addresses not configured"));
 
         let insurance_client = InsuranceClient::new(&env, &addresses.insurance);
         let policy_page = insurance_client.get_active_policies(&user, &0, &50);
@@ -590,7 +591,7 @@ impl ReportingContract {
             .storage()
             .instance()
             .get(&symbol_short!("ADDRS"))
-            .expect("Contract addresses not configured");
+            .unwrap_or_else(|| panic!("Contract addresses not configured"));
 
         // Savings score (0-40 points)
         let savings_client = SavingsGoalsClient::new(&env, &addresses.savings_goals);
@@ -779,7 +780,7 @@ impl ReportingContract {
             .storage()
             .instance()
             .get(&symbol_short!("ADMIN"))
-            .expect("Contract not initialized");
+            .unwrap_or_else(|| panic!("Contract not initialized"));
 
         if caller != admin {
             panic!("Only admin can archive reports");
@@ -880,7 +881,7 @@ impl ReportingContract {
             .storage()
             .instance()
             .get(&symbol_short!("ADMIN"))
-            .expect("Contract not initialized");
+            .unwrap_or_else(|| panic!("Contract not initialized"));
 
         if caller != admin {
             panic!("Only admin can cleanup reports");
