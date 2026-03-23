@@ -75,6 +75,29 @@ These contracts have been developed and tested with the following versions:
 | Protocol 20  | -       | ✅ Compatible | Soroban Phase 1 features                     |
 | Protocol 21+ | -       | ⚠️ Untested   | Should be compatible, validation recommended |
 
+### Data Migration Import Version Policy
+
+The `data_migration` crate enforces a strict and deterministic schema import policy to avoid unsafe upgrades or silent downgrades.
+
+- Imports use explicit `ALLOW` and `DENY` sets in `data_migration/src/lib.rs`.
+- Decision order is fixed:
+  1. Deny-list match (hard reject)
+  2. Backward-incompatible version (`< MIN_SUPPORTED_VERSION`)
+  3. Forward-incompatible version (`> SCHEMA_VERSION`)
+  4. Allow-list match (accept)
+  5. Any other version (deny by default)
+- Version validation is performed before checksum verification, so unsupported snapshots fail fast with a deterministic reason.
+- Current policy values:
+  - `MIN_SUPPORTED_VERSION = 1`
+  - `SCHEMA_VERSION = 1`
+  - `ALLOWED_IMPORT_VERSIONS = [1]`
+  - `DENIED_IMPORT_VERSIONS = []`
+
+Security notes:
+- Default-deny behavior prevents accidental acceptance of unreviewed schema versions.
+- Explicit deny entries support emergency blocks for known-bad versions.
+- Deterministic error classes (`legacy`, `future`, `policy-denied`) improve incident triage and monitoring.
+
 ### Upgrading to New Soroban Versions
 
 When a new Soroban SDK or protocol version is released, follow these steps to validate and upgrade:

@@ -16,6 +16,23 @@ pub const SCHEMA_VERSION: u32 = 1;
 /// Minimum supported schema version for import.
 pub const MIN_SUPPORTED_VERSION: u32 = 1;
 
+/// @notice Explicit allow-list for importable schema versions.
+/// @dev Keep this list tightly scoped; each allowed version must be reviewed.
+pub const ALLOWED_IMPORT_VERSIONS: &[u32] = &[1];
+
+/// @notice Explicit deny-list for schema versions that must never be imported.
+/// @dev Deny entries always take precedence over allow-list entries.
+pub const DENIED_IMPORT_VERSIONS: &[u32] = &[];
+
+/// Deterministic compatibility decision used by import policy checks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VersionCompatibility {
+    Allowed,
+    DeniedByPolicy,
+    UnsupportedLegacy,
+    UnsupportedFuture,
+}
+
 /// Versioned migration event payload meant for indexing and historical tracking.
 ///
 /// # Indexer Migration Guidance
@@ -118,7 +135,10 @@ impl ExportSnapshot {
 
     /// Check if snapshot version is supported for import.
     pub fn is_version_compatible(&self) -> bool {
-        self.header.version >= MIN_SUPPORTED_VERSION && self.header.version <= SCHEMA_VERSION
+        matches!(
+            evaluate_version_compatibility(self.header.version),
+            VersionCompatibility::Allowed
+        )
     }
 
     /// Validate snapshot for import: version and checksum.
@@ -165,6 +185,7 @@ fn format_label(f: ExportFormat) -> String {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MigrationError {
     IncompatibleVersion { found: u32, min: u32, max: u32 },
+    DeniedVersion { found: u32 },
     ChecksumMismatch,
     InvalidFormat(String),
     ValidationFailed(String),
@@ -180,6 +201,9 @@ impl std::fmt::Display for MigrationError {
                     "incompatible version {} (supported {}-{})",
                     found, min, max
                 )
+            }
+            MigrationError::DeniedVersion { found } => {
+                write!(f, "version {} is explicitly denied by import policy", found)
             }
             MigrationError::ChecksumMismatch => write!(f, "checksum mismatch"),
             MigrationError::InvalidFormat(s) => write!(f, "invalid format: {}", s),
@@ -293,15 +317,37 @@ struct CsvGoalRow {
 
 /// Version compatibility check for migration scripts.
 pub fn check_version_compatibility(version: u32) -> Result<(), MigrationError> {
-    if version >= MIN_SUPPORTED_VERSION && version <= SCHEMA_VERSION {
-        Ok(())
-    } else {
-        Err(MigrationError::IncompatibleVersion {
+    match evaluate_version_compatibility(version) {
+        VersionCompatibility::Allowed => Ok(()),
+        VersionCompatibility::DeniedByPolicy => Err(MigrationError::DeniedVersion { found: version }),
+        VersionCompatibility::UnsupportedLegacy | VersionCompatibility::UnsupportedFuture => {
+            Err(MigrationError::IncompatibleVersion {
             found: version,
             min: MIN_SUPPORTED_VERSION,
             max: SCHEMA_VERSION,
-        })
+            })
+        }
     }
+}
+
+/// @notice Evaluates import compatibility for a snapshot schema version.
+/// @dev Order is deterministic and security-focused:
+/// 1) explicit deny-list, 2) backward/legacy rejection, 3) forward rejection,
+/// 4) explicit allow-list. Unknown versions default to deny.
+pub fn evaluate_version_compatibility(version: u32) -> VersionCompatibility {
+    if DENIED_IMPORT_VERSIONS.contains(&version) {
+        return VersionCompatibility::DeniedByPolicy;
+    }
+    if version < MIN_SUPPORTED_VERSION {
+        return VersionCompatibility::UnsupportedLegacy;
+    }
+    if version > SCHEMA_VERSION {
+        return VersionCompatibility::UnsupportedFuture;
+    }
+    if ALLOWED_IMPORT_VERSIONS.contains(&version) {
+        return VersionCompatibility::Allowed;
+    }
+    VersionCompatibility::DeniedByPolicy
 }
 
 /// Rollback metadata (for migration scripts to record last good state).
@@ -329,15 +375,19 @@ mod hex {
 mod tests {
     use super::*;
 
+    fn sample_split_payload(owner: &str) -> SnapshotPayload {
+        SnapshotPayload::RemittanceSplit(RemittanceSplitExport {
+            owner: owner.into(),
+            spending_percent: 40,
+            savings_percent: 30,
+            bills_percent: 20,
+            insurance_percent: 10,
+        })
+    }
+
     #[test]
     fn test_snapshot_checksum_roundtrip_succeeds() {
-        let payload = SnapshotPayload::RemittanceSplit(RemittanceSplitExport {
-            owner: "GABC".into(),
-            spending_percent: 50,
-            savings_percent: 30,
-            bills_percent: 15,
-            insurance_percent: 5,
-        });
+        let payload = sample_split_payload("GABC");
         let snapshot = ExportSnapshot::new(payload, ExportFormat::Json);
         assert!(snapshot.verify_checksum());
         assert!(snapshot.is_version_compatible());
@@ -346,13 +396,7 @@ mod tests {
 
     #[test]
     fn test_export_import_json_succeeds() {
-        let payload = SnapshotPayload::RemittanceSplit(RemittanceSplitExport {
-            owner: "GXYZ".into(),
-            spending_percent: 40,
-            savings_percent: 40,
-            bills_percent: 10,
-            insurance_percent: 10,
-        });
+        let payload = sample_split_payload("GXYZ");
         let snapshot = ExportSnapshot::new(payload, ExportFormat::Json);
         let bytes = export_to_json(&snapshot).unwrap();
         let loaded = import_from_json(&bytes).unwrap();
@@ -362,13 +406,7 @@ mod tests {
 
     #[test]
     fn test_export_import_binary_succeeds() {
-        let payload = SnapshotPayload::RemittanceSplit(RemittanceSplitExport {
-            owner: "GBIN".into(),
-            spending_percent: 25,
-            savings_percent: 25,
-            bills_percent: 25,
-            insurance_percent: 25,
-        });
+        let payload = sample_split_payload("GBIN");
         let snapshot = ExportSnapshot::new(payload, ExportFormat::Binary);
         let bytes = export_to_binary(&snapshot).unwrap();
         let loaded = import_from_binary(&bytes).unwrap();
@@ -377,13 +415,7 @@ mod tests {
 
     #[test]
     fn test_checksum_mismatch_import_fails() {
-        let payload = SnapshotPayload::RemittanceSplit(RemittanceSplitExport {
-            owner: "GX".into(),
-            spending_percent: 100,
-            savings_percent: 0,
-            bills_percent: 0,
-            insurance_percent: 0,
-        });
+        let payload = sample_split_payload("GX");
         let mut snapshot = ExportSnapshot::new(payload, ExportFormat::Json);
         snapshot.header.checksum = "wrong".into();
         assert!(!snapshot.verify_checksum());
@@ -391,11 +423,60 @@ mod tests {
     }
 
     #[test]
-    fn test_check_version_compatibility_succeeds() {
+    fn test_check_version_compatibility_succeeds_and_rejects_edges() {
         assert!(check_version_compatibility(1).is_ok());
         assert!(check_version_compatibility(SCHEMA_VERSION).is_ok());
-        assert!(check_version_compatibility(0).is_err());
-        assert!(check_version_compatibility(SCHEMA_VERSION + 1).is_err());
+        assert_eq!(
+            check_version_compatibility(0),
+            Err(MigrationError::IncompatibleVersion {
+                found: 0,
+                min: MIN_SUPPORTED_VERSION,
+                max: SCHEMA_VERSION
+            })
+        );
+        assert_eq!(
+            check_version_compatibility(SCHEMA_VERSION + 1),
+            Err(MigrationError::IncompatibleVersion {
+                found: SCHEMA_VERSION + 1,
+                min: MIN_SUPPORTED_VERSION,
+                max: SCHEMA_VERSION
+            })
+        );
+    }
+
+    #[test]
+    fn test_evaluate_version_policy_is_deterministic() {
+        assert_eq!(
+            evaluate_version_compatibility(0),
+            VersionCompatibility::UnsupportedLegacy
+        );
+        assert_eq!(
+            evaluate_version_compatibility(SCHEMA_VERSION + 1),
+            VersionCompatibility::UnsupportedFuture
+        );
+        assert_eq!(
+            evaluate_version_compatibility(SCHEMA_VERSION),
+            VersionCompatibility::Allowed
+        );
+    }
+
+    #[test]
+    fn test_policy_defaults_to_deny_for_in_range_unallowed_versions() {
+        assert_eq!(SCHEMA_VERSION, 1, "update this test when adding new schema versions");
+        assert_eq!(
+            ALLOWED_IMPORT_VERSIONS,
+            &[1],
+            "update this test when changing explicit allow-list"
+        );
+    }
+
+    #[test]
+    fn test_denied_version_error_display_is_stable() {
+        let err = MigrationError::DeniedVersion { found: 9 };
+        assert_eq!(
+            err.to_string(),
+            "version 9 is explicitly denied by import policy"
+        );
     }
 
     #[test]
@@ -439,5 +520,22 @@ mod tests {
 
         let MigrationEvent::V1(v1) = loaded;
         assert_eq!(v1.version, SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn test_import_rejects_forward_version_before_checksum() {
+        let payload = sample_split_payload("GFORWARD");
+        let mut snapshot = ExportSnapshot::new(payload, ExportFormat::Json);
+        snapshot.header.version = SCHEMA_VERSION + 1;
+        snapshot.header.checksum = "wrong".into();
+
+        assert_eq!(
+            snapshot.validate_for_import(),
+            Err(MigrationError::IncompatibleVersion {
+                found: SCHEMA_VERSION + 1,
+                min: MIN_SUPPORTED_VERSION,
+                max: SCHEMA_VERSION
+            })
+        );
     }
 }
