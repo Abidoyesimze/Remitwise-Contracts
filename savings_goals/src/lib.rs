@@ -88,7 +88,7 @@ pub struct SavingsSchedule {
 }
 
 #[contracttype]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SavingsGoalsError {
     InvalidAmount = 1,
     GoalNotFound = 2,
@@ -157,10 +157,19 @@ pub enum SavingsEvent {
     ScheduleCancelled,
 }
 
+/// Snapshot for savings goals export/import (migration).
+///
+/// # Schema Version Tag
+/// `schema_version` carries the explicit snapshot format version.
+/// Importers **must** validate this field against the supported range
+/// (`MIN_SUPPORTED_SCHEMA_VERSION..=SCHEMA_VERSION`) before applying the
+/// snapshot. Snapshots with an unknown future version must be rejected.
 #[contracttype]
 #[derive(Clone)]
 pub struct GoalsExportSnapshot {
-    pub version: u32,
+    /// Explicit schema version tag for this snapshot format.
+    /// Supported range: MIN_SUPPORTED_SCHEMA_VERSION..=SCHEMA_VERSION.
+    pub schema_version: u32,
     pub checksum: u64,
     pub next_id: u32,
     pub goals: Vec<SavingsGoal>,
@@ -175,7 +184,10 @@ pub struct AuditEntry {
     pub success: bool,
 }
 
-const SNAPSHOT_VERSION: u32 = 1;
+/// Current snapshot schema version. Bump this when GoalsExportSnapshot format changes.
+const SCHEMA_VERSION: u32 = 1;
+/// Oldest snapshot schema version this contract can import. Enables backward compat.
+const MIN_SUPPORTED_SCHEMA_VERSION: u32 = 1;
 const MAX_AUDIT_ENTRIES: u32 = 100;
 const CONTRACT_VERSION: u32 = 1;
 const MAX_BATCH_SIZE: u32 = 50;
@@ -205,6 +217,11 @@ pub enum SavingsGoalError {
     GoalLocked = 3,
     Unauthorized = 4,
     TargetAmountMustBePositive = 5,
+    /// Snapshot schema_version is outside the supported range
+    /// (MIN_SUPPORTED_SCHEMA_VERSION..=SCHEMA_VERSION).
+    UnsupportedVersion = 6,
+    /// Snapshot checksum does not match the recomputed digest.
+    ChecksumMismatch = 7,
 }
 #[contract]
 pub struct SavingsGoalContract;
@@ -1082,9 +1099,13 @@ impl SavingsGoalContract {
                 list.push_back(g);
             }
         }
-        let checksum = Self::compute_goals_checksum(SNAPSHOT_VERSION, next_id, &list);
+        let checksum = Self::compute_goals_checksum(SCHEMA_VERSION, next_id, &list);
+        env.events().publish(
+            (symbol_short!("goals"), symbol_short!("snap_exp")),
+            SCHEMA_VERSION,
+        );
         GoalsExportSnapshot {
-            version: SNAPSHOT_VERSION,
+            schema_version: SCHEMA_VERSION,
             checksum,
             next_id,
             goals: list,
@@ -1096,19 +1117,25 @@ impl SavingsGoalContract {
         caller: Address,
         nonce: u64,
         snapshot: GoalsExportSnapshot,
-    ) -> bool {
+    ) -> Result<bool, SavingsGoalError> {
         caller.require_auth();
         Self::require_nonce(&env, &caller, nonce);
 
-        if snapshot.version != SNAPSHOT_VERSION {
+        // Accept any schema_version within the supported range for backward/forward compat.
+        if snapshot.schema_version < MIN_SUPPORTED_SCHEMA_VERSION
+            || snapshot.schema_version > SCHEMA_VERSION
+        {
             Self::append_audit(&env, symbol_short!("import"), &caller, false);
-            panic!("Unsupported snapshot version");
+            return Err(SavingsGoalError::UnsupportedVersion);
         }
-        let expected =
-            Self::compute_goals_checksum(snapshot.version, snapshot.next_id, &snapshot.goals);
+        let expected = Self::compute_goals_checksum(
+            snapshot.schema_version,
+            snapshot.next_id,
+            &snapshot.goals,
+        );
         if snapshot.checksum != expected {
             Self::append_audit(&env, symbol_short!("import"), &caller, false);
-            panic!("Snapshot checksum mismatch");
+            return Err(SavingsGoalError::ChecksumMismatch);
         }
 
         Self::extend_instance_ttl(&env);
@@ -1134,7 +1161,7 @@ impl SavingsGoalContract {
 
         Self::increment_nonce(&env, &caller);
         Self::append_audit(&env, symbol_short!("import"), &caller, true);
-        true
+        Ok(true)
     }
 
     pub fn get_audit_log(env: Env, from_index: u32, limit: u32) -> Vec<AuditEntry> {
