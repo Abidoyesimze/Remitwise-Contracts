@@ -88,7 +88,7 @@ pub struct SavingsSchedule {
 }
 
 #[contracttype]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SavingsGoalsError {
     InvalidAmount = 1,
     GoalNotFound = 2,
@@ -296,7 +296,7 @@ impl SavingsGoalContract {
 
     pub fn pause(env: Env, caller: Address) {
         caller.require_auth();
-        let admin = Self::get_pause_admin(&env).ok_or(SavingsGoalsError::Unauthorized).unwrap();
+        let admin = Self::get_pause_admin(&env).unwrap();
         if admin != caller {
             panic!("Unauthorized");
         }
@@ -309,7 +309,7 @@ impl SavingsGoalContract {
 
     pub fn unpause(env: Env, caller: Address) {
         caller.require_auth();
-        let admin = Self::get_pause_admin(&env).ok_or(SavingsGoalsError::Unauthorized).unwrap();
+        let admin = Self::get_pause_admin(&env).unwrap();
         if admin != caller {
             panic!("Unauthorized");
         }
@@ -329,7 +329,7 @@ impl SavingsGoalContract {
 
     pub fn pause_function(env: Env, caller: Address, func: Symbol) {
         caller.require_auth();
-        let admin = Self::get_pause_admin(&env).ok_or(SavingsGoalsError::Unauthorized).unwrap();
+        let admin = Self::get_pause_admin(&env).unwrap();
         if admin != caller {
             panic!("Unauthorized");
         }
@@ -346,7 +346,7 @@ impl SavingsGoalContract {
 
     pub fn unpause_function(env: Env, caller: Address, func: Symbol) {
         caller.require_auth();
-        let admin = Self::get_pause_admin(&env).ok_or(SavingsGoalsError::Unauthorized).unwrap();
+        let admin = Self::get_pause_admin(&env).unwrap();
         if admin != caller {
             panic!("Unauthorized");
         }
