@@ -48,7 +48,6 @@ orchestrator = { path = "./orchestrator" }
 [dev-dependencies]
 soroban-sdk = { version = "21.0.0", features = ["testutils"] }
 
-
 [profile.release]
 opt-level = "z"
 overflow-checks = true
