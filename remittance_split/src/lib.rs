@@ -436,9 +436,18 @@ impl RemittanceSplit {
         }
 
         let split = Self::get_split(&env);
-        let s0 = match split.get(0) { Some(v) => v as i128, None => return Err(RemittanceSplitError::Overflow) };
-        let s1 = match split.get(1) { Some(v) => v as i128, None => return Err(RemittanceSplitError::Overflow) };
-        let s2 = match split.get(2) { Some(v) => v as i128, None => return Err(RemittanceSplitError::Overflow) };
+        let s0 = match split.get(0) {
+            Some(v) => v as i128,
+            None => return Err(RemittanceSplitError::Overflow),
+        };
+        let s1 = match split.get(1) {
+            Some(v) => v as i128,
+            None => return Err(RemittanceSplitError::Overflow),
+        };
+        let s2 = match split.get(2) {
+            Some(v) => v as i128,
+            None => return Err(RemittanceSplitError::Overflow),
+        };
 
         let spending = total_amount
             .checked_mul(s0)
@@ -962,7 +971,7 @@ impl RemittanceSplit {
     }
 }
 
-#[cfg(any(test, feature = "testutils"))]
+#[cfg(test)]
 mod test {
     #![allow(clippy::doc_lazy_continuation)]
     use super::*;
