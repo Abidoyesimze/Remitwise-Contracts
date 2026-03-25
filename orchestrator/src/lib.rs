@@ -224,7 +224,7 @@ pub enum OrchestratorError {
 /// At most one execution can be active at any time. Any attempt to enter
 /// `Executing` state while already executing returns `ReentrancyDetected`.
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u32)]
 pub enum ExecutionState {
     /// No execution in progress; entry points may be called
@@ -522,6 +522,35 @@ impl Orchestrator {
         let allocations = split_client.calculate_split(&total_amount);
 
         Ok(allocations)
+    }
+
+    /// Validate addresses used by the remittance flow.
+    ///
+    /// Security policy: all downstream contract addresses must be distinct to avoid
+    /// accidental routing of multiple steps to the same contract.
+    fn validate_remittance_flow_addresses(
+        _env: &Env,
+        family_wallet_addr: &Address,
+        remittance_split_addr: &Address,
+        savings_addr: &Address,
+        bills_addr: &Address,
+        insurance_addr: &Address,
+    ) -> Result<(), OrchestratorError> {
+        let addresses = [
+            family_wallet_addr,
+            remittance_split_addr,
+            savings_addr,
+            bills_addr,
+            insurance_addr,
+        ];
+        for i in 0..addresses.len() {
+            for j in (i + 1)..addresses.len() {
+                if addresses[i] == addresses[j] {
+                    return Err(OrchestratorError::InvalidContractAddress);
+                }
+            }
+        }
+        Ok(())
     }
 
     // ============================================================================
