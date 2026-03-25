@@ -11,38 +11,31 @@
 use remittance_split::{RemittanceSplit, RemittanceSplitClient};
 use soroban_sdk::{testutils::Address as _, Address, Env};
 
-/// Helper: register a dummy token address (no real token needed for pure math tests).
-fn dummy_token(env: &Env) -> Address {
-    Address::generate(env)
-}
-
-/// Helper: initialize split with a dummy token address.
+/// Helper: initialize split.
 fn init(
     client: &RemittanceSplitClient,
-    env: &Env,
+    _env: &Env,
     owner: &Address,
     s: u32,
     g: u32,
     b: u32,
     i: u32,
 ) {
-    let token = dummy_token(env);
-    client.initialize_split(owner, &0, &token, &s, &g, &b, &i);
+    client.initialize_split(owner, &0, &s, &g, &b, &i);
 }
 
-/// Helper: try_initialize_split with a dummy token address.
+/// Helper: fallible initialize split.
 fn try_init(
     client: &RemittanceSplitClient,
-    env: &Env,
+    _env: &Env,
     owner: &Address,
     s: u32,
     g: u32,
     b: u32,
     i: u32,
 ) -> Result<bool, ()> {
-    let token = dummy_token(env);
     client
-        .try_initialize_split(owner, &0, &token, &s, &g, &b, &i)
+        .try_initialize_split(owner, &0, &s, &g, &b, &i)
         .map(|r| r.unwrap())
         .map_err(|_| ())
 }
