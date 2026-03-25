@@ -1038,7 +1038,7 @@
             ],
             "data": {
               "error": {
-                "contract": 2
+                "contract": 1
               }
             }
           }
@@ -1059,7 +1059,7 @@
               },
               {
                 "error": {
-                  "contract": 2
+                  "contract": 1
                 }
               }
             ],
@@ -1084,14 +1084,14 @@
               },
               {
                 "error": {
-                  "contract": 2
+                  "contract": 1
                 }
               }
             ],
             "data": {
               "vec": [
                 {
-                  "string": "contract try_call failed"
+                  "string": "contract call failed"
                 },
                 {
                   "symbol": "withdraw_from_goal"
@@ -1113,6 +1113,31 @@
                   ]
                 }
               ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": null,
+        "type_": "diagnostic",
+        "body": {
+          "v0": {
+            "topics": [
+              {
+                "symbol": "error"
+              },
+              {
+                "error": {
+                  "contract": 1
+                }
+              }
+            ],
+            "data": {
+              "string": "escalating error to panic"
             }
           }
         }

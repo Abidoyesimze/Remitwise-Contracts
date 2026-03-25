@@ -128,6 +128,12 @@
                                   },
                                   {
                                     "key": {
+                                      "symbol": "external_ref"
+                                    },
+                                    "val": "void"
+                                  },
+                                  {
+                                    "key": {
                                       "symbol": "frequency_days"
                                     },
                                     "val": {
@@ -185,6 +191,14 @@
                                       "symbol": "schedule_id"
                                     },
                                     "val": "void"
+                                  },
+                                  {
+                                    "key": {
+                                      "symbol": "tags"
+                                    },
+                                    "val": {
+                                      "vec": []
+                                    }
                                   }
                                 ]
                               }
@@ -347,6 +361,41 @@
           "v0": {
             "topics": [
               {
+                "symbol": "bill"
+              },
+              {
+                "vec": [
+                  {
+                    "symbol": "Created"
+                  }
+                ]
+              }
+            ],
+            "data": {
+              "vec": [
+                {
+                  "u32": 1
+                },
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFCT4"
+                },
+                "void"
+              ]
+            }
+          }
+        }
+      },
+      "failed_call": false
+    },
+    {
+      "event": {
+        "ext": "v0",
+        "contract_id": "0000000000000000000000000000000000000000000000000000000000000001",
+        "type_": "contract",
+        "body": {
+          "v0": {
+            "topics": [
+              {
                 "symbol": "Remitwise"
               },
               {
@@ -486,6 +535,12 @@
                 },
                 {
                   "key": {
+                    "symbol": "external_ref"
+                  },
+                  "val": "void"
+                },
+                {
+                  "key": {
                     "symbol": "frequency_days"
                   },
                   "val": {
@@ -543,6 +598,14 @@
                     "symbol": "schedule_id"
                   },
                   "val": "void"
+                },
+                {
+                  "key": {
+                    "symbol": "tags"
+                  },
+                  "val": {
+                    "vec": []
+                  }
                 }
               ]
             }
